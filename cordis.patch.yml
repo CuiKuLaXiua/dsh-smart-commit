@@ -1,0 +1,4 @@
+# dsh-smart-commit bundle patch
+- insert:
+    - id: dsh-smart-commit
+      name: 'dsh-smart-commit'

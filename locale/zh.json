@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "智能提交 (dsh-smart-commit)",
+    "description": "分析 Git 变更并生成符合 Conventional Commits 的中文提交，支持 WIP / amend / squash 流程。"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "智能提交 (dsh-smart-commit)",
+    "description": "Smart Git commits: analyze changes and generate Conventional Commits in Chinese, with WIP/amend/squash workflows."
+  }
+}

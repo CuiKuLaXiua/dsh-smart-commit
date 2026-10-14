@@ -1,0 +1,47 @@
+{
+  "name": "dsh-smart-commit",
+  "version": "0.1.0",
+  "description": "智能 Git 提交：分析变更并生成符合 Conventional Commits 的中文提交，支持 WIP/amend/squash",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "author": "dsh-smart-commit contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CuiKuLaXiua/dsh-smart-commit.git"
+  },
+  "homepage": "https://github.com/CuiKuLaXiua/dsh-smart-commit#readme",
+  "bugs": {
+    "url": "https://github.com/CuiKuLaXiua/dsh-smart-commit/issues"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "smoke": "node smoke.mjs"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "locale",
+    "README.md",
+    "icon.svg"
+  ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "git",
+    "commit",
+    "conventional-commits"
+  ]
+}
