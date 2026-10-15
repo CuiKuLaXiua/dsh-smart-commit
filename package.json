@@ -1,6 +1,6 @@
 {
   "name": "dsh-smart-commit",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "智能 Git 提交：分析变更并生成符合 Conventional Commits 的中文提交，支持 WIP/amend/squash",
   "license": "MIT",
   "type": "module",

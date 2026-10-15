@@ -2,17 +2,14 @@
 
 根据当前状态修改最近一次提交。请直接执行，不要输出多余的解释文字。
 
-## 开始前：安全检查（阻断式）
+## 开始前：安全检查
 
 阅读「Git 事实」中的 `git status --porcelain` 与 `git branch -vv`：
 
-1. 若分支已推送到远程（存在上游跟踪分支）：必须先经用户文字确认——amend 会改写历史，
-   之后需要 `git push --force-with-lease` 才能同步。用 `ask_user_question` 询问：
-   - question：`分支已推送到远程，amend 会改写历史，是否继续？`
-   - header：`历史改写确认`
-   - options：`继续 amend` / `取消`
-2. 保护分支（`main` / `master` / `release/*`）一律先经用户文字确认，同样用 `ask_user_question`
-3. 用户选择「取消」或关闭询问：结束流程，不要输出提交计划
+1. 若分支已推送到远程（存在上游跟踪分支）：在正文明确提醒 amend 会改写历史、之后需要
+   `git push --force-with-lease` 才能同步，然后**直接继续**——不要就此提问
+2. 保护分支（`main` / `master` / `release/*`）同样在正文提醒一句，继续执行
+3. 本流程唯一的提问在「情况 B」（需要用户给出新 message 时），除此之外不要提出其他确认问题
 
 ## 情况 A：有未暂存或未提交的变更
 

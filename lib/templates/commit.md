@@ -77,19 +77,27 @@ refactor(db): 将查询构建器迁移到仓储模式
 Closes #234
 ```
 
-## 第四步：向用户确认并输出提交计划
+## 第四步：展示预览并询问是否推送
 
-1. 先检查「Git 事实」中是否配置了 pre-commit hook（`.husky/`、`lefthook.yml`、`.pre-commit-config.yaml`、`package.json` 中的 `lint-staged`），如有则提醒用户
-2. 使用 `ask_user_question` 向用户展示**文件清单 + 完整 commit message 预览**并请求确认：
-   - question：`即将提交以上文件，是否执行？`
-   - header：`提交确认`
-   - options：`执行提交` / `取消`
-3. 用户选择「取消」或关闭询问：结束流程，不要输出提交计划
-4. 用户选择「执行提交」：若「Git 事实」显示配置了 origin 远程仓库，**必须**再用 `ask_user_question` 询问是否推送，只问一次：
+1. 先检查「Git 事实」中是否配置了 pre-commit hook（`.husky/`、`lefthook.yml`、`.pre-commit-config.yaml`、`package.json` 中的 `lint-staged`），如有则在正文提醒用户
+2. 在正文中以**可读的多行 markdown** 展示文件清单与完整 commit message 预览（多分组时逐个分组展示）。
+   用户通过阅读这段预览完成确认——**不要**用 `ask_user_question` 就「是否执行」再问一遍
+3. 若「Git 事实」显示配置了 origin 远程仓库，**必须**用 `ask_user_question` 询问是否推送，只问一次：
    - question：`提交已完成，是否推送到远程仓库？`
    - header：`推送确认`
    - options（顺序固定）：`推送到远程` / `暂不推送`
-5. 输出提交计划围栏块：`push` 仅在用户明确选择「推送到远程」且存在 origin 远程时为 `true`，否则 `false`
+4. 用户选择「取消」或关闭询问：`push` 为 `false`，不追问
+
+## 第五步：输出提交计划
+
+输出提交计划围栏块：`push` 仅在用户明确选择「推送到远程」且存在 origin 远程时为 `true`，否则 `false`
+
+## 确认纪律（重要）
+
+整个流程只允许**一次** `ask_user_question`（即第四步的推送确认）。除此之外**不要提出任何其他
+确认问题**——例如「是否输出提交计划」「计划是否已最终确认」「是否继续」这类追问一律禁止。
+用户阅读第四步的预览即可判断，反复提问只会拖慢流程。文件清单与 message 的正确性由你自查承担，
+插件宿主会强制校验。
 
 ## 安全约束（最高优先级，插件宿主会强制执行）
 
