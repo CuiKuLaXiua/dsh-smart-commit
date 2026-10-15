@@ -34,15 +34,20 @@
 
 ## 第三步：输出提交计划
 
-围栏块中使用 `"squash": <N>`（N 必须等于已确认的数量）加上合并后的 `message`：
+围栏块中使用 `squash: <N>`（N 必须等于已确认的数量）加上合并后的 `message`：
 
 ```smart-commit
-{
-  "commits": [
-    { "squash": 3, "message": "refactor(plugin): 合并命令面迁移的临时提交" }
-  ],
-  "push": false
-}
+commits:
+  - squash: 3
+    message: |
+      refactor(plugin): 合并命令面迁移的临时提交
+
+      ## What
+      - 将四次临时提交合并为一个完整变更
+
+      ## Why
+      - 保持历史整洁，便于回溯
+push: false
 ```
 
 ## 安全提醒（插件宿主会强制执行）

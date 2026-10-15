@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0] - 2026-10
+
+### Fixed
+- **提交计划可读性**：围栏协议从 JSON 改为 YAML 块标量（`message: |`）。此前多行
+  commit message 必须写成 `\n` 转义的单行字符串，围栏块里整条 message 挤成一行，
+  `## What` / `## Why` 完全无法审阅——而这恰恰是用户唯一要看的内容
+- **确认通道失效时不再中止流程**：`ask_user_question` 连续失败两次时，改为在正文
+  列出待确认内容（文件清单 + commit message 预览）、明确声明未经确认、`push` 强制
+  为 `false`，并照常输出提交计划。此前该故障会直接结束整个流程，不创建任何提交
+
+### Changed
+- 新增受限 YAML 解析器（`lib/git.js`，零外部依赖，保持 host 半自包含）：
+  支持两级映射/序列、块标量 `|` 与 `>`、行内序列 `[a, b]`、布尔与整数标量
+- `parsePlan` 自动判别 YAML 与 JSON：**旧版 JSON 围栏仍可执行**，0.3 缓存的
+  agent 行为或模型惯性输出不会导致解析失败
+- 四个模板的协议示例与字段说明同步更新（`execution-rules.md` 为四流程共用）
+
+### Security
+- 权限闸门保持不变且经断言覆盖：未授权 `push` / `amend` / `squash` 一律拒绝；
+  敏感文件、`reset --hard`、force push 等约束仍由宿主侧强制执行
+- `message` 的 clip chomping 仅保留一个尾部换行（YAML 标准行为），不产生尾部空行
+
 ## [0.3.0] - 2026-10
 
 ### Changed
