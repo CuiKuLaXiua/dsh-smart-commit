@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0] - 2026-10
+
+### Changed
+- **git 执行迁到插件宿主进程**：host 半用 `node:child_process` 直跑 git（新增 `lib/git.js`），
+  不再依赖 agent 的 shell。Windows 上 DSH 沙箱偶发杀死 pwsh 进程（退出码 `3221225794` =
+  `0xC0000142`，STATUS_DLL_INIT_FAILED）时，本插件完全不受影响
+- 提交流程改为「host 采集 git 事实 → agent 生成提交信息并向用户确认 → host 执行」：
+  agent 不再运行任何命令，只读事实、写 commit message、用 `ask_user_question` 确认
+- 新增提交计划协议：agent 在最后一条消息输出 ` ```smart-commit ` 围栏 JSON
+  （`commits[].files` / `message` / `amend` / `squash` + `push`），host 解析、校验并执行
+- 新增 `GET /smart-commit/events`（SSE）与 `GET /smart-commit/status`：执行结果推送给
+  浏览器半，以 composer 提示条展示
+- 四个模板重写：不再包含任何 git 命令；安全约束改由宿主强制执行
+
+### Security
+- 宿主侧强制：敏感文件在显式 `files` 中直接拒绝、在省略 `files` 时自动排除；
+  只允许普通 `git push`（无上游时一次 `-u origin <branch>`），永不 force；
+  禁止 `reset --hard` / `clean -fd` / `checkout -- .`；squash 只允许 `reset --soft`；
+  squash 数量 1–50；文件路径必须位于会话仓库内
+- 每个会话同时只有一个进行中的任务（重复触发返回 409）
+
+### Migration（0.2 → 0.3）
+- 用户侧行为不变：仍然一键触发、中途确认、结果通知；但 agent 不再需要 shell
+- agent 未输出提交计划时，host 在 10 分钟超时后报告失败并给出最后一条消息内容
+- 页面刷新后不会再收到执行结果通知（任务仍在宿主侧完成）；重新触发即可
+
 ## [0.2.0] - 2026-10
 
 ### Added

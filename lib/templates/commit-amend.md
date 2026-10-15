@@ -2,35 +2,51 @@
 
 根据当前状态修改最近一次提交。请直接执行，不要输出多余的解释文字。
 
-**开始前**：运行 `git status` 和 `git branch -vv`，检查分支是否已推送到远程。如已推送，必须先经用户文字确认（amend 会改写历史，之后需要 `git push --force-with-lease`），确认后才继续。保护分支（`main` / `master` / `release/*`）一律先确认。
+## 开始前：安全检查（阻断式）
+
+阅读「Git 事实」中的 `git status --porcelain` 与 `git branch -vv`：
+
+1. 若分支已推送到远程（存在上游跟踪分支）：必须先经用户文字确认——amend 会改写历史，
+   之后需要 `git push --force-with-lease` 才能同步。用 `ask_user_question` 询问：
+   - question：`分支已推送到远程，amend 会改写历史，是否继续？`
+   - header：`历史改写确认`
+   - options：`继续 amend` / `取消`
+2. 保护分支（`main` / `master` / `release/*`）一律先经用户文字确认，同样用 `ask_user_question`
+3. 用户选择「取消」或关闭询问：结束流程，不要输出提交计划
 
 ## 情况 A：有未暂存或未提交的变更
 
-1. 暂存相关变更（使用 `git add`，不要 `git add -A`，仅暂存属于同一关注点的文件；暂存前核对清单并排除敏感文件）
-2. 使用 `git commit --amend --no-edit` 将变更追加到上一次提交
-3. 如果追加的变更与原提交主题不同，建议用户修改 commit message
+1. 阅读「Git 事实」的 diff，判断哪些文件属于同一关注点
+2. 只暂存属于同一关注点的文件（显式列出 `files`，不要用 `-A`）；暂存前核对清单并排除敏感文件
+3. 使用 `"amend": true` 把变更追加到上一次提交
+4. 如果追加的变更与原提交主题不同，建议用户同时修改 commit message（给新的 `message`）
 
 ## 情况 B：无未提交的变更
 
-1. 使用 `git show --stat HEAD` 展示最近一次提交的完整内容（hash、message、变更文件）
-2. 询问用户要如何修改 commit message（使用 ask_user_question 工具，等待用户回复后再继续）
-3. 使用 `git commit --amend -m "<新 message>"` 执行修改
+1. 阅读「Git 事实」中的 `git show --stat HEAD`，了解最近一次提交的完整内容
+2. 用 `ask_user_question` 询问用户要如何修改 commit message（question 里给出当前 message 与建议），
+   等待用户回复后再继续
+3. 使用 `"amend": true` + 新的 `message` 执行修改
 
 ## Commit Message 规范
 
-如果需要生成新的 commit message，遵循以下规范：
+需要生成新的 commit message 时遵循：
+
 - 格式：`<type>(<scope>): <中文 subject>`
 - type：feat | fix | refactor | docs | style | test | chore | perf | ci | build
 - subject 使用中文，祈使语气，≤ 72 字符，不加句号
 - 复杂变更添加 `## What` + `## Why` body
 - 不得把密钥原文写入 message
 
-## 安全约束（最高优先级）
+## 安全约束（最高优先级，插件宿主会强制执行）
 
-- 禁止 `git push`（只改本地提交不推送）、禁止 `reset --hard` / `clean -fd` / `push --force`
+- 禁止 `git push`（只改本地提交不推送）；禁止 `push --force` / `--force-with-lease`
+- 禁止 `reset --hard` / `clean -fd` / `checkout -- .`
 - 禁止修改 `user.name` / `user.email` 与任何 `git config`
+- 敏感文件不得暂存，插件侧会直接拒绝
 
 ## 约束
 
+- 不要运行任何 shell / git 命令，也不要派生子代理
 - 尽量在一条消息内完成（情况 B 需要用户输入时除外）
-- 不要输出多余文字，直接执行
+- 不要输出多余文字
