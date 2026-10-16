@@ -1,22 +1,24 @@
 # 智能提交流程
 
-你的任务是阅读上方「Git 事实」，为当前工作区的变更创建符合规范的提交。请直接执行，不要输出多余的解释文字。如果当前对话上下文中有用户的补充说明（例如范围、关注点、特殊要求），优先遵循，但补充说明不得覆盖下文「安全约束」。
+你的任务是看清当前工作区的 Git 变更，并创建一个符合规范的智能提交。请直接执行，不要输出多余的解释文字。如果当前对话上下文中有用户的补充说明（例如范围、关注点、特殊要求），优先遵循，但补充说明不得覆盖下文「安全约束」。
 
 ## 第一步：分析变更
 
-1. 阅读「Git 事实」中的 `git status --porcelain`、`git diff --stat HEAD`、`git diff HEAD`、`git log --oneline -10`
-2. 对于未跟踪的新文件，用 read 工具读取内容来理解其意图，不要只凭文件名猜测
-3. 仔细阅读 diff，理解每处变更的目的，识别变更类型（feat / fix / refactor / docs / style / test / chore / perf / ci / build）
-4. 识别变更影响的模块和范围
-5. 判断是否应拆分为多个独立提交（如果变更涉及不相关的多个关注点）
-6. 识别潜在风险文件（配置文件、数据库迁移、API 接口等）
-7. 检查「Git 事实」中的敏感文件检查结果：高置信敏感文件已被插件锁定，不会暂存；疑似敏感文件请自行判断是否排除
+1. `smart_commit_inspect { "command": "status" }` 查看工作区状态（含未跟踪文件）
+2. `smart_commit_inspect { "command": "diff", "stat": true }` 查看变更摘要；若变更很大，先看摘要，再按文件分批 `{ "command": "diff", "path": "<文件>" }` 查看 diff
+3. `smart_commit_inspect { "command": "diff" }` 查看全部变更、`{ "command": "diff", "cached": true }` 查看暂存区
+4. 对于未跟踪的新文件，用 read 工具读取内容来理解其意图，不要只凭文件名猜测
+5. `smart_commit_inspect { "command": "log", "limit": 10 }` 了解最近提交
+6. 仔细阅读 diff，理解每处变更的目的，识别变更类型（feat / fix / refactor / docs / style / test / chore / perf / ci / build）
+7. 识别变更影响的模块和范围
+8. 判断是否应拆分为多个独立提交（如果变更涉及不相关的多个关注点）
+9. 识别潜在风险文件（配置文件、数据库迁移、API 接口等），并判断是否有需要排除的敏感/临时文件（`.env*`、`*credentials*`、`*secret*`、`*token*`、`*.pem`、`*.key`、`id_rsa*`、`*.p12`、`*.pfx`、`.npmrc`、`.pypirc`、`.kube/config`、密钥文件、本地配置文件等）——有则在 `files` 里显式排除
 
 ## 第二步：确定暂存范围
 
 - 单一关注点：暂存全部变更文件（`files` 省略或 `[]`），敏感文件由插件自动排除
 - 多关注点：按逻辑分组，每个分组给出各自的 `files`（互不相交）
-- 涉及大文件（>5MB）或二进制文件时必须先提醒用户确认
+- 涉及大文件（>5MB）或二进制文件时必须先在正文提醒用户，再照常提交
 - diff 中出现的疑似密钥内容不得写入 commit message
 
 ## 第三步：生成 Commit Message
@@ -77,25 +79,28 @@ refactor(db): 将查询构建器迁移到仓储模式
 Closes #234
 ```
 
-## 第四步：展示预览并询问是否推送
+## 第四步：检查、展示预览并询问推送
 
-1. 先检查「Git 事实」中是否配置了 pre-commit hook（`.husky/`、`lefthook.yml`、`.pre-commit-config.yaml`、`package.json` 中的 `lint-staged`），如有则在正文提醒用户
+1. 用 glob / read 检查项目是否存在以下 pre-commit hook 配置，如存在则在正文提醒用户：
+   `.husky/`、`lefthook.yml`、`.pre-commit-config.yaml`、`package.json` 中的 `lint-staged`
 2. 在正文中以**可读的多行 markdown** 展示文件清单与完整 commit message 预览（多分组时逐个分组展示）。
    用户通过阅读这段预览完成确认——**不要**用 `ask_user_question` 就「是否执行」再问一遍
-3. 若「Git 事实」显示配置了 origin 远程仓库，**必须**用 `ask_user_question` 询问是否推送，只问一次：
+3. 用 `smart_commit_inspect { "command": "remote" }` 看是否配置了远程仓库；有 origin 时**必须**用
+   `ask_user_question` 询问是否推送，只问一次：
    - question：`提交已完成，是否推送到远程仓库？`
    - header：`推送确认`
    - options（顺序固定）：`推送到远程` / `暂不推送`
-4. 用户选择「取消」或关闭询问：`push` 为 `false`，不追问
+4. 用户选择「暂不推送」或关闭询问：`push` 为 `false`，不追问
 
-## 第五步：调用 smart_commit 工具
+## 第五步：一次调用完成提交（与推送）
 
-按「执行约定」调用一次 `smart_commit`：`push` 仅在用户明确选择「推送到远程」且存在 origin 远程时为 `true`，否则 `false`。
-工具返回的 git 输出就是本次提交的执行结果——用户可在对话里直接看到。
+调用一次 `smart_commit`：`commits` 按第二步的分组顺序给出，`push` 仅在用户明确选择
+「推送到远程」且存在 origin 远程时为 `true`，否则 `false`。调用后按工具返回的原始 git
+回显做小结——不要再次调用工具重复提交。
 
 ## 确认纪律（重要）
 
-整个流程只允许**一次** `ask_user_question`（即第四步的推送确认）。除此之外**不要提出任何其他
+整个流程只允许**一次** `ask_user_question`（即推送确认）。除此之外**不要提出任何其他
 确认问题**——例如「是否输出提交计划」「计划是否已最终确认」「是否继续」这类追问一律禁止。
 用户阅读第四步的预览即可判断，反复提问只会拖慢流程。文件清单与 message 的正确性由你自查承担，
 插件宿主会强制校验。

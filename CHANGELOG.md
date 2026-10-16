@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.6.1] - 2026-10
+
+### Changed
+
+- **唤醒消息不再伪装成用户发言**：命令触发后的唤醒消息改用插件自有的 producer kind（与注入模板
+  同一个 `source.kind`）。GUI 按 `source.kind` 分流（`dsh-client-ui-chat` 的 `messageDefinition`：
+  `kind === "user"` → 用户气泡；其它 producer kind → 可折叠的「上下文注入」行），因此对话里不再出现
+  一条「你说的话」。**唤醒能力不受影响**：宿主侧 `steer` 本来就是 `send(target, wakeup=true)`，
+  与 source 无关；模型侧内容也不变（仍是 user 角色消息）
+- 唤醒文案压到最短：`执行智能提交流程。` / `执行 WIP 提交流程。` / `执行 amend 流程。` /
+  `执行 squash 流程。`——流程约束、工具用法、禁令全在注入模板里，唤醒语只负责叫醒
+
+## [0.6.0] - 2026-10
+
+### Changed
+
+- **观感对齐 Zenith**（依据客户端实测反馈）：git 仍由宿主进程执行，但过程与结果都变成「原始 git 回显」
+  - **不再预注入 Git 事实**：新增只读工具 `smart_commit_inspect`（`status` / `diff` / `log` / `show` /
+    `branch` / `remote`），agent 自己按需探查；返回的就是 `$ git status --porcelain=v1 -uall` 这类
+    命令与它**真实的输出**，与在 Zenith 里 agent 自己跑 git 命令看到的一致
+  - **`smart_commit` 结果改为原始回显**：`$ git add …` / `$ git commit -m "…"` / `$ git push` /
+    `$ git log --oneline -5 --stat` 及其真实输出，不再是我们自己撰写的中文摘要
+  - 提交改用 `git commit -m`（不再写临时 message 文件），回显与真实命令一致
+
+### Fixed
+
+- **部分成功不再被吞掉**：提交已完成、推送失败时按成功返回，并把失败原文附在结果里
+  （`⚠️ git push 失败（已完成的提交保留）：…`）。此前整单以 Error 收场，把已成功的提交淹没
+- **入参宽松化**：模型把 `commits` / `files` / 整体入参写成 JSON 字符串时自动还原。此前会直接以
+  「提交计划必须包含非空 commits 数组」失败（实测中确实出现过一次失败卡片）
+- 命令流程前置校验工作区是否为 git 仓库，不是则直接以 error 收场（不再让 agent 空跑一轮）
+
+### Removed
+
+- 预注入的「Git 事实」区块与 `collectFacts()`（改由 `smart_commit_inspect` 按需获取）
+- 临时 commit message 文件的读写
+
 ## [0.5.0] - 2026-10
 
 ### Changed

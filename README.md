@@ -16,8 +16,17 @@ DeepSeek Harness (DSH) 标准插件 — **智能 Git 提交**。
 四个命令是 host 命令，因此：命令后可以带行内参数（`/commit 只提交 lib 目录`、`/commit-squash 3`）；
 每次执行都会在会话日志里留下 `command/run` → `command/done` 记录，刷新页面后仍可回溯。
 
-提交本身由模型可见工具 `smart_commit` 完成（agent 分析与确认后调用），执行输出以工具结果
-显示在对话里，因此**真实 git 输出可见、可回溯**。
+提交由两个模型可见工具完成，全程**不需要 shell**：
+
+- `smart_commit_inspect`（只读）：agent 用它自己看清仓库状态，返回**原始 git 回显**
+  （`$ git status --porcelain=v1 -uall` + 真实输出；支持 diff / log / show / branch / remote）
+- `smart_commit`（执行）：提交与推送，结果同样是原始回显（`$ git add` / `$ git commit` /
+  `$ git push` / `$ git log --stat` + 真实输出）；提交成功但推送失败属于**部分成功**，
+  已完成提交会保留、失败原文附在结果里
+
+命令触发后，**流程模板与唤醒消息都以可折叠的「上下文注入」行出现**（两者都用插件自有的
+`source.kind`），不会在对话里留下伪装成用户发言的提示；流程启动的可见提示由命令行
+（`已启动智能提交流程…`）承担。
 
 ## 安装
 
@@ -54,24 +63,26 @@ dsh plugin --profile web add github:CuiKuLaXiua/dsh-smart-commit
 - **不改写 git 配置**：不自动设置 `user.name` / `user.email`
 - **敏感文件防护**：提交前检查 `.env`、密钥、token 等敏感文件并排除
 - **输入收敛**：补充说明截断 500 字，squash 数量限制 1–50
-- **路由信任栅栏**：host 路由仅接受本机 GUI 的同源请求（Host 回环/显式信任 + 同源标记，与 `/api` 网关同构）
+- **不改写仓库状态**：不做 `git config`、不切换工作区、不动用户已有暂存区之外的内容
 
-## 架构（0.5 起）
+## 架构（0.6 起）
 
-命令面是 **host 命令**，执行面是 **模型可见工具**：
+命令面是 **host 命令**，执行面是**两个模型可见工具**（agent 全程不需要 shell）：
 
 - **命令面**：四个命令通过 `ctx.commands.register` 注册，声明 `input` 提示。因此
   `/` 菜单行、行内参数（`/commit 补充说明`、`/commit-squash 5`）与官方命令生命周期
   （`command/run` → `command/done`，记录进会话日志）都在；刷新后仍可回溯。
-  命令处理体只做三件事：采集 git 事实 → 注入「执行约定 + 模板 + 事实」→ 唤醒 agent。
-- **执行面**：`ctx.tools.register` 注册工具 `smart_commit`。agent 分析变更、向用户确认后
-  调用该工具；执行体在插件宿主进程用 `node:child_process` 直跑 git（`lib/git.js`），
-  **不经过 agent 的命令沙箱**。执行输出作为 `tool/result` 落在对话里，真实 git 输出可见。
+  命令处理体只做两件事：校验工作区在 git 仓库内 → 注入「执行约定 + 模板」→ 唤醒 agent。
+- **探查面**：`ctx.tools.register` 注册**只读**工具 `smart_commit_inspect`
+  （`status` / `diff` / `log` / `show` / `branch` / `remote`）。agent 自己按需探查，
+  返回**原始 git 回显**——与在 Zenith 里 agent 自己跑 `git status` / `git diff` 看到的一致。
+- **执行面**：工具 `smart_commit` 在宿主进程用 `node:child_process` 直跑 git（`lib/git.js`），
+  **不经过 agent 的命令沙箱**；结果同样是原始回显。提交成功但推送失败属于**部分成功**。
 - **自包含**：只用 `node:` 内建模块与相对文件，禁止裸 `@deepseek-ai/*` import。
 
 ### 工具入参
 
-agent 不运行任何命令；它调用一次 `smart_commit`：
+agent 先探查看清状态，再调用一次 `smart_commit`：
 
 ```json
 {
@@ -99,13 +110,14 @@ agent 不运行任何命令；它调用一次 `smart_commit`：
 
 ### 版本沿革
 
-| 版本 | 命令面 | git 执行 |
-|---|---|---|
-| 0.1 | host 命令 | agent 的 shell（受沙箱影响） |
-| 0.2 | 客户端 `action` 贡献（拿菜单样式，丢行内参数与生命周期） | agent 的 shell |
-| 0.3 | 客户端贡献 | 插件宿主进程（宿主校验 + SSE 推结果） |
-| 0.4 | 客户端贡献 | 插件宿主进程，提交计划走围栏协议 |
-| **0.5** | **host 命令（行内参数 + 生命周期结果行）** | **宿主进程，由 `smart_commit` 工具触发** |
+| 版本 | 命令面 | 探查 | git 执行 |
+|---|---|---|---|
+| 0.1 | host 命令 | agent 自己的 shell | agent 自己的 shell（受沙箱影响） |
+| 0.2 | 客户端 `action` 贡献（拿菜单样式，丢行内参数与生命周期） | agent 自己的 shell | agent 自己的 shell |
+| 0.3 | 客户端贡献 | 宿主预注入「Git 事实」 | 插件宿主进程（宿主校验 + SSE 推结果） |
+| 0.4 | 客户端贡献 | 宿主预注入「Git 事实」 | 宿主进程，提交计划走围栏协议 |
+| 0.5 | host 命令（行内参数 + 生命周期结果行） | 宿主预注入「Git 事实」 | 宿主进程，由 `smart_commit` 工具触发 |
+| **0.6** | 同 0.5 | **`smart_commit_inspect` 只读探查（原始 git 回显）** | **宿主进程，结果原始回显 + 部分成功** |
 
 本地化：菜单行文案来自 host 命令的 `description`（`lib/index.js` 的 `COMMANDS` 表）；
 `locale/*.json` 提供插件列表里的标题与描述。
@@ -133,9 +145,11 @@ npm pack          # 打包检查
 
 - 纯 Node ESM，零运行时依赖，host 半只用 `node:` 内建模块
 - 流程模板位于 `lib/templates/*.md`（`execution-rules.md` 为四流程共用），是 agent 行为的权威约束
-- 命令族表与 `smart_commit` 工具定义位于 `lib/index.js`（`COMMANDS` + `PLAN_PARAMETERS` + `runPlan`）
-- 宿主侧 git 执行器位于 `lib/git.js`（facts 采集 + 计划校验 + 执行）
+- 命令族表与两个工具的定义位于 `lib/index.js`（`COMMANDS` + `PLAN_PARAMETERS` + `runPlan`）
+- 宿主侧 git 层位于 `lib/git.js`：`inspectRepo`（只读探查，白名单子命令）+
+  `validatePlan`（计划校验）+ `executePlan`（执行，返回原始回显与部分成功信息）
 - 本地安装测试：`dsh plugin --profile desktop add file:<本目录>`
+  （`file:` 依赖是**拷贝**而非软链，改完代码要重新 install 并重启客户端才生效）
 
 ## 发布（维护者）
 

@@ -2,23 +2,40 @@
 
 ## 你不运行任何命令
 
-本流程的 git 操作由插件宿主进程执行，你只需调用工具 **`smart_commit`**（Git 事实见上方「Git 事实」）。
+本流程的 git 操作由插件宿主进程执行，你只有两个工具可用（**先探查、再提交**）：
+
+- `smart_commit_inspect`：**只读**查看仓库状态，返回 git 命令的**原始回显**
+  （`status` / `diff` / `log` / `show` / `branch` / `remote`）
+- `smart_commit`：执行提交与推送
+
 **禁止**调用 pwsh / bash / 终端等任何能执行命令的工具，也**不要**尝试运行 git：
 
 - 本机 shell 可能不可用——Windows 上 DSH 沙箱偶发导致 PowerShell 进程启动即崩溃
   （退出码 `3221225794` = `0xC0000142`，STATUS_DLL_INIT_FAILED），重试也不会好；
-- git 事实已全部在上方「Git 事实」中；如需更多文件细节，用 read / grep / glob 读文件；
+- 需要看清变更就用 `smart_commit_inspect`；需要看文件内容用 read / grep / glob；
 - 需要向用户确认时**只能**使用 `ask_user_question` 工具——它不依赖 shell。
 
-## 提交方式：调用 `smart_commit` 工具
+## 第一步：探查（不要凭猜测）
 
-分析完成后，在正文给出文件清单与完整 message 预览（这是用户确认的依据），然后调用一次 `smart_commit`。
+按需调用 `smart_commit_inspect`，它返回的输出与你自己跑 git 一模一样：
+
+- `{ "command": "status" }` → `git status --porcelain=v1 -uall`（含未跟踪文件）
+- `{ "command": "diff", "stat": true }` → `git diff --stat HEAD`（先看摘要）
+- `{ "command": "diff" }` → `git diff HEAD`（全部变更；变更很大时用 `path` 按文件分批看）
+- `{ "command": "diff", "cached": true }` → `git diff --cached`（暂存区）
+- `{ "command": "log", "limit": 10 }` → `git log --oneline -10`
+- `{ "command": "show" }` → `git show --stat --oneline HEAD`（amend / squash 用）
+- `{ "command": "branch" }` / `{ "command": "remote" }` → 分支与远程
+
+## 第二步：调用 `smart_commit` 执行
+
+在正文给出文件清单与完整 message 预览（这是用户确认的依据），然后调用一次 `smart_commit`。
 
 参数说明（这些是**工具入参**，不是要你输出到正文的内容）：
 
 - `commits`：提交分组，按数组顺序依次执行。变更涉及多个不相关关注点时拆成多个分组，
   各分组 `files` 互不相交
-- `files`：要暂存的仓库内相对路径，取自上方 `git status --porcelain`；也可以是目录（如 `lib`）。
+- `files`：要暂存的仓库内相对路径，取自上面 status 的输出；也可以是目录（如 `lib`）。
   省略、`[]` 表示全部变更文件（敏感文件会被插件自动排除）
 - `message`：完整 commit message，形如
   `"fix(auth): 修复刷新令牌过期\n\n## What\n- 调整刷新分支\n\n## Why\n- 避免并发刷新失败"`；
@@ -30,11 +47,20 @@
 
 硬性规则：
 
-1. 调用工具前**不要**声称「已提交」——提交由插件执行，工具的返回就是执行结果
-2. 计划中的 `files` 若包含敏感文件（`.env*`、`*.pem`、`*.key`、`id_rsa*`、`.npmrc`、
-   `*credentials*` 等），插件会直接拒绝执行，请先自行排除
-3. 工具失败时按返回的错误修正计划并重试（同一流程最多 3 次）；仍失败就把错误原文报告给用户
-4. 工具已在本次流程外失效（会话里没有进行中的提交流程）时，提示用户重新触发 `/commit` 系列命令
+1. 调用工具前**不要**声称「已提交」——工具的返回才是执行结果
+2. `files` 若包含敏感文件（`.env*`、`*.pem`、`*.key`、`id_rsa*`、`.npmrc`、`*credentials*` 等），
+   插件会直接拒绝执行，请先自行排除
+3. 工具返回的是**原始 git 回显**（`$ git add ...` / `$ git commit ...` 及其输出）：
+   把它当作你自己跑出来的结果读，并按下面的「收尾」小结
+4. **部分成功**：提交成功但推送失败时，提交会被保留，工具会给出失败原文——
+   照实汇报（「已提交 <hash>，推送失败：<原文>」），**不要重试推送**、不要降级为其他操作
+5. 工具报错（没做成任何提交）时，按错误原文修正计划后重试；同一流程最多 3 次
+6. 提示「没有进行中的提交流程」时，说明流程已失效，请用户重新触发 `/commit` 系列命令
+
+## 收尾：给用户看的结果
+
+提交完成后用 2–4 行小结：hash + 变更文件数/`+ -` 统计 + 需要注意的点
+（被排除的敏感文件、pre-commit hook、未提交的残留变更等）。不要在正文回显全量 diff。
 
 ## 确认纪律（重要）
 

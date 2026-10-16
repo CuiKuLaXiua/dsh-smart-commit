@@ -3,15 +3,17 @@
 - 纯 Node ESM 宿主插件，零运行时依赖，只用 `node:` 内建模块（`node:fs` / `node:crypto` / `node:child_process`）。
 - 入口 `lib/index.js` 分两面：
   - **命令面**：`ctx.commands.register` 注册 `/commit`、`/commit-wip`、`/commit-amend`、`/commit-squash`
-    （声明 `input` 提示 → 支持行内参数）。处理体只做三件事：采集 git 事实 → 注入模板与事实 → 唤醒 agent，
+    （声明 `input` 提示 → 支持行内参数）。处理体只做两件事：校验工作区在 git 仓库内 → 注入模板 → 唤醒 agent，
     并登记本次流程的许可（`workflows`）。
-  - **执行面**：`ctx.tools.register` 注册工具 `smart_commit`。agent 调用后，`runPlan()` 校验计划
-    （`validatePlan` + `assertFlowShape`）并在宿主进程执行 git。
+  - **工具面**：`ctx.tools.register` 注册两个工具——
+    `smart_commit_inspect`（只读探查，白名单子命令，返回原始 git 回显）与
+    `smart_commit`（`runPlan()` 校验计划 `validatePlan` + `assertFlowShape` 后在宿主进程执行 git）。
+  - 入参宽松化：模型可能把 `commits` / `files` / 整体入参写成 JSON 字符串，`normalizePlan()` 负责还原。
 - 流程模板位于 `lib/templates/*.md`（`execution-rules.md` 为四流程共用），是 agent 行为的权威约束
   （安全禁令、确认纪律、工具调用协议）；改行为请改模板。
 - 自检：`npm run smoke`
-  （语法 + 模板/自包含断言 + 伪 ctx 挂载 + 真实临时 git 仓库端到端：注入、敏感文件排除、
-  单次使用、权限收窄、squash、amend、非 git 目录）。
+  （语法 + 模板/自包含断言 + 伪 ctx 挂载 + 真实临时 git 仓库端到端：探查回显、入参宽松化、
+  原始回显、敏感文件排除、单次使用、权限收窄、部分成功、squash、amend、不可用工作区）。
 - 调试提示：宿主半不能裸 import `@deepseek-ai/*`（宿主机运行时解析不到工作区包），
   smoke 里有对应断言；工具定义按官方 `ctx.tools.register` 的字段要求手工构造
   （`{ name, description, parameters, output: { schema, render }, execute }`），

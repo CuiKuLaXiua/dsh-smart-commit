@@ -4,7 +4,7 @@
 
 ## 第零步：安全检查
 
-阅读「Git 事实」中的 `git status --porcelain` 与 `git branch -vv`：
+用 `smart_commit_inspect` 看清状态：`{ "command": "status" }` 与 `{ "command": "branch" }`（`branch -vv`）：
 
 1. 若存在**已暂存或未暂存**的变更：在正文提醒用户先提交或 stash（避免被 `reset --soft` 卷入合并提交）。
    插件侧在工作区不干净时会直接拒绝执行，所以你照常继续分析即可
@@ -16,7 +16,7 @@
 
 - 如果用户指定了数量参数（模板注入时已把 {N} 解析为具体数字，命令行写作 `/commit-squash 3`），
   压缩最近 {N} 个提交，直接使用该数字作为 `squash` 值
-- 如果未指定，阅读「Git 事实」中的 `git log --oneline -10`，分析最近提交：
+- 如果未指定，用 `{ "command": "log", "limit": 10 }` 分析最近提交：
   - 查找连续的 `wip:` / `fixup:` / `fix:` 等临时提交
   - 建议将这些临时提交与相关的正式提交压缩在一起
   - 用 `ask_user_question` 向用户确认压缩范围（options 给出 2–3 个候选数量），等待回复后再继续
@@ -24,7 +24,8 @@
 
 ## 第二步：生成合并后的 Commit Message
 
-综合所有被压缩提交的内容（用 read 工具查看需要细节的文件），生成一条规范的 commit message：
+综合所有被压缩提交的内容（必要时用 `{ "command": "show", "rev": "<hash>" }` 或 read 工具查看细节），
+生成一条规范的 commit message：
 
 - 格式：`<type>(<scope>): <中文 subject>`
 - type：feat | fix | refactor | docs | style | test | chore | perf | ci | build

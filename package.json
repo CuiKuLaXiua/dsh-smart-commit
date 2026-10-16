@@ -1,7 +1,7 @@
 {
   "name": "dsh-smart-commit",
-  "version": "0.5.0",
-  "description": "智能 Git 提交：/commit 系列 host 命令 + smart_commit 宿主工具，生成符合 Conventional Commits 的中文提交，支持 WIP/amend/squash",
+  "version": "0.6.1",
+  "description": "智能 Git 提交：/commit 系列 host 命令 + smart_commit_inspect / smart_commit 宿主工具（原始 git 回显、无需 shell），生成符合 Conventional Commits 的中文提交，支持 WIP/amend/squash",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
