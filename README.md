@@ -8,17 +8,21 @@ DeepSeek Harness (DSH) 标准插件 — **智能 Git 提交**。
 
 | 命令 | 作用 |
 |------|------|
-| `/commit` | 分析变更并创建规范提交（含推送询问） |
-| `/commit-wip` | 快速暂存全部变更并创建 `wip:` 临时提交 |
-| `/commit-amend` | 修改最近一次提交（追加变更或修改 message） |
-| `/commit-squash` | 将最近 N 个提交压缩为一个 |
+| `/commit [补充说明]` | 分析变更并创建规范提交（含推送询问） |
+| `/commit-wip [补充说明]` | 快速暂存全部变更并创建 `wip:` 临时提交 |
+| `/commit-amend [补充说明]` | 修改最近一次提交（追加变更或修改 message） |
+| `/commit-squash [N]` | 将最近 N 个提交压缩为一个（N 可省略，届时由 agent 建议范围） |
 
-在 `/` 菜单中，四个命令与官方命令同款显示：**左侧图标 + 中间本地化名称 + 右侧英文名 + 最右描述**
-（中文界面显示「提交 / 临时提交 / 修订提交 / 压缩提交」，英文界面显示 `Commit / WIP Commit / …`）。
+四个命令是 host 命令，因此：命令后可以带行内参数（`/commit 只提交 lib 目录`、`/commit-squash 3`）；
+每次执行都会在会话日志里留下 `command/run` → `command/done` 记录，刷新页面后仍可回溯。
+
+提交本身由模型可见工具 `smart_commit` 完成（agent 分析与确认后调用），执行输出以工具结果
+显示在对话里，因此**真实 git 输出可见、可回溯**。
 
 ## 安装
 
-前置：已安装 DeepSeek Harness（Web 或桌面版），agent 具备可用的 git 工具（终端/Shell 类工具）。
+前置：已安装 DeepSeek Harness（Web 或桌面版）。**agent 不需要 shell 或 git 工具**——
+git 由插件宿主进程直接执行。
 
 ### Web 版
 
@@ -52,53 +56,59 @@ dsh plugin --profile web add github:CuiKuLaXiua/dsh-smart-commit
 - **输入收敛**：补充说明截断 500 字，squash 数量限制 1–50
 - **路由信任栅栏**：host 路由仅接受本机 GUI 的同源请求（Host 回环/显式信任 + 同源标记，与 `/api` 网关同构）
 
-## 架构（0.3 起）
+## 架构（0.5 起）
 
-0.2 把命令面从 host 命令迁到**开放 API 的客户端贡献**，以获得官方命令的菜单样式；
-0.3 把 **git 执行从 agent 的 shell 迁到插件宿主进程**，使功能不再受 agent 执行环境影响。
+命令面是 **host 命令**，执行面是 **模型可见工具**：
 
-- **host 半**（`lib/index.js` + `lib/git.js`）：
-  - `POST /smart-commit/run`：校验入参 → 用 `ctx.agents.get(sessionId)` 解析 agent →
-    在会话仓库内采集 git 事实（status / diff / log / branch / remote / 敏感文件检查）→
-    注入「执行约定 + 命令模板 + git 事实」并唤醒 agent → 等 agent 产出提交计划 →
-    校验并执行（add / commit / amend / squash / push）→ 通过 SSE 推送结果
-  - `GET /smart-commit/events`（SSE）与 `GET /smart-commit/status`：任务状态查询
-  - 自包含：只用 `node:` 内建模块，禁裸 `@deepseek-ai/*` import
-- **client 半**（`lib/client.js`）：`ctx.commandUi.register()` 注册四个贡献
-  （`label()` / `description()` / `icon` 即官方行契约），action 调用 host 路由，
-  并用 SSE 订阅执行结果；同时装饰 `/` 菜单的技能源，让技能行也呈现
-  「图标 + 中文名 + 英文名 + 描述」
+- **命令面**：四个命令通过 `ctx.commands.register` 注册，声明 `input` 提示。因此
+  `/` 菜单行、行内参数（`/commit 补充说明`、`/commit-squash 5`）与官方命令生命周期
+  （`command/run` → `command/done`，记录进会话日志）都在；刷新后仍可回溯。
+  命令处理体只做三件事：采集 git 事实 → 注入「执行约定 + 模板 + 事实」→ 唤醒 agent。
+- **执行面**：`ctx.tools.register` 注册工具 `smart_commit`。agent 分析变更、向用户确认后
+  调用该工具；执行体在插件宿主进程用 `node:child_process` 直跑 git（`lib/git.js`），
+  **不经过 agent 的命令沙箱**。执行输出作为 `tool/result` 落在对话里，真实 git 输出可见。
+- **自包含**：只用 `node:` 内建模块与相对文件，禁止裸 `@deepseek-ai/*` import。
 
-### 提交计划协议
+### 工具入参
 
-agent 不需要（也不允许）运行任何命令。它在最后一条消息输出一个围栏块，host 解析后执行：
+agent 不运行任何命令；它调用一次 `smart_commit`：
 
-```smart-commit
+```json
 {
   "commits": [
-    { "files": ["lib/index.js"], "message": "refactor(plugin): 示例\n\n## What\n- ...", "amend": false, "squash": 0 }
+    { "files": ["lib/index.js"], "message": "refactor(plugin): 示例\n\n## What\n- ...", "amend": false, "squash": 3 }
   ],
   "push": false
 }
 ```
 
-- `files` 省略 / `[]` / `["-A"]` 表示全部变更（敏感文件自动排除）；显式列出敏感文件会被拒绝
-- `amend` 仅 amend 流程；`squash` 仅 squash 流程（1–50）；`push` 仅 commit 流程且需用户明确确认
+- `files` 省略 / `[]` 表示全部变更（敏感文件自动排除）；显式列出敏感文件会被拒绝
+- `amend` 仅 amend 流程（且必须为 `true`）；`squash` 仅 squash 流程（1–50，必须给出）
+- `push` 仅 commit 流程，且需用户明确确认
 
 ### 宿主强制的安全约束
 
-敏感文件拒绝/排除、只允许普通 push（无上游时一次 `-u origin <branch>`，永不 force）、
-禁止 `reset --hard` / `clean -fd` / `checkout -- .`、squash 只允许 `reset --soft`、
-文件路径必须在会话仓库内、每会话同时只有一个任务（409）。
+- **权限随流程收窄、单次生效**：`smart_commit` 只在本会话刚触发过命令后可用；
+  `/commit` 允许 push、`/commit-amend` 允许 amend、`/commit-squash` 允许 squash；
+  成功即失效，超过 60 分钟或超过 3 次尝试即失效
+- 敏感文件拒绝/排除、只允许普通 push（无上游时一次 `-u origin <branch>`，永不 force）、
+  禁止 `reset --hard` / `clean -fd` / `checkout -- .`、squash 只允许 `reset --soft`、
+  文件路径必须在会话仓库内
+- 流程形态校验：squash 流程缺 `squash` 数量、amend 流程缺 `amend: true` 都会被拒绝，
+  避免模型漏字段时「悄悄」新建提交
 
-与 0.1/0.2 的行为差异：
+### 版本沿革
 
-- 不再有 host 命令生命周期事件（`command/run`、`command/done`）与结果流节点；执行结果以 composer 提示条反馈
-- 不再支持命令后带行内参数（`/commit <补充说明>` 的 input claim）；当前贡献只响应裸 token。
-  host 路由的协议保留 `extra` / `n` 字段（同一套 sanitize 与边界校验），供后续 popup 形态使用
+| 版本 | 命令面 | git 执行 |
+|---|---|---|
+| 0.1 | host 命令 | agent 的 shell（受沙箱影响） |
+| 0.2 | 客户端 `action` 贡献（拿菜单样式，丢行内参数与生命周期） | agent 的 shell |
+| 0.3 | 客户端贡献 | 插件宿主进程（宿主校验 + SSE 推结果） |
+| 0.4 | 客户端贡献 | 插件宿主进程，提交计划走围栏协议 |
+| **0.5** | **host 命令（行内参数 + 生命周期结果行）** | **宿主进程，由 `smart_commit` 工具触发** |
 
-本地化文案在 `lib/client.js` 顶部的 `COMMAND_ZH` / `COMMAND_EN` / `SKILL_ZH` 表中维护
-（`SKILL_ZH` 可自行扩充，未收录的技能保留英文名但仍获得图标）。
+本地化：菜单行文案来自 host 命令的 `description`（`lib/index.js` 的 `COMMANDS` 表）；
+`locale/*.json` 提供插件列表里的标题与描述。
 
 ## 排障：PowerShell 启动即崩溃（退出码 3221225794）
 
@@ -108,7 +118,7 @@ Windows 上 DSH 用 ACL 受限令牌沙箱（Low 完整性 + `WRITE_RESTRICTED`�
 
 **0.3 起本插件完全不受它影响**：git 由插件宿主进程直接执行（`node:child_process`），
 不经过 agent 的命令沙箱；agent 只读 host 采集的 git 事实、生成 commit message、
-用 `ask_user_question` 向你确认——这些都不需要 shell。
+用 `ask_user_question` 向你确认，然后调用 `smart_commit` 工具——这些都不需要 shell。
 
 如果会话里**其他**功能（让 agent 跑命令）遇到该崩溃：它是瞬时性的（通常几分钟内自行恢复），
 可以稍后重试，或把该会话的文件策略切到 `danger-full-access`；`read-only` 模式下写操作被拒
@@ -117,12 +127,13 @@ Windows 上 DSH 用 ACL 受限令牌沙箱（Low 完整性 + `WRITE_RESTRICTED`�
 ## 开发
 
 ```sh
-npm run smoke     # 语法 + 模板安全断言
+npm run smoke     # 语法 + 模板断言 + 伪 ctx 挂载 + 真实临时 git 仓库端到端
 npm pack          # 打包检查
 ```
 
 - 纯 Node ESM，零运行时依赖，host 半只用 `node:` 内建模块
 - 流程模板位于 `lib/templates/*.md`（`execution-rules.md` 为四流程共用），是 agent 行为的权威约束
+- 命令族表与 `smart_commit` 工具定义位于 `lib/index.js`（`COMMANDS` + `PLAN_PARAMETERS` + `runPlan`）
 - 宿主侧 git 执行器位于 `lib/git.js`（facts 采集 + 计划校验 + 执行）
 - 本地安装测试：`dsh plugin --profile desktop add file:<本目录>`
 

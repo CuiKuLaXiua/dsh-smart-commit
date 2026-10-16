@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.5.0] - 2026-10
+
+### Changed
+
+- **命令面回到 host 命令**（`ctx.commands.register`，声明 `input` 提示）：恢复行内参数
+  （`/commit 补充说明`、`/commit-squash 5`），并获得官方命令生命周期
+  （`command/run` → `command/done` 记录进会话日志，结果行刷新后仍可回溯）。
+  此前用客户端 `action` 贡献实现，两项能力都拿不到
+- **git 执行改由模型可见工具 `smart_commit` 触发**：agent 完成分析与确认后调用该工具，
+  执行体仍在插件宿主进程内（`lib/git.js`），因此不受 agent shell 沙箱影响；执行输出以
+  `tool/result` 落在对话里，真实 git 输出可见、可回溯
+- 四个流程模板与 `execution-rules.md` 随协议改写：输出 ` ```smart-commit ` 围栏 → 调用
+  `smart_commit` 工具；多行 message 用 JSON 换行转义，不再需要 YAML 块标量
+
+### Removed
+
+- 客户端半（`lib/client.js`）与 `package.json` 的 `dsh.client` / 客户端 peerDependencies：
+  host 命令与同名客户端贡献会冲突（官方规则：同名冲突会显式报错），二者只能选一
+- `POST /smart-commit/run`、`GET /smart-commit/events`（SSE）、`GET /smart-commit/status`
+  三条路由与自实现信任栅栏：结果反馈不再需要浏览器侧通道
+- 提交计划的围栏协议与受限 YAML 解析器（约 240 行）：计划即工具入参，不再有文本协议解析
+- `waitForPlan` 轮询与 `MAX_EMPTY_TURNS` 判定：不再需要猜测「agent 是否输出了计划」，
+  也避免了把会话里其它回合算成本次流程的失败
+
+### Fixed
+
+- **`/commit-amend` 的「情况 B」（无未提交变更、只改写 message）此前必然失败**：
+  `git commit --amend` 在无可暂存内容时被拦下；现在 amend 允许空暂存，仅改写 message，
+  并在结果里说明「工作区无变更，仅改写提交信息」
+- 补充说明与 squash 数量不再是死字段（此前请求体里的 `extra` / `n` 永远为空）
+
+### Security
+
+- 权限随流程收窄并单次生效：`smart_commit` 只在本会话刚触发过命令后可用，
+  `/commit` 允许 push、`/commit-amend` 允许 amend、`/commit-squash` 允许 squash；
+  成功即失效，超过 60 分钟或超过 3 次尝试即失效
+- 流程形态校验：squash 流程必须给出 `squash` 数量、amend 流程必须每组建 `amend: true`，
+  避免模型漏字段时「悄悄」新建提交
+- 敏感文件拒绝/排除、只允许普通 push（无上游时一次 `-u origin <branch>`，永不 force）、
+  禁止 `reset --hard` / `clean -fd` / `checkout -- .`、squash 只允许 `reset --soft`、
+  文件路径必须在会话仓库内：全部保持不变，由宿主侧强制执行
+- `npm run smoke` 从「语法 + 关键词断言」升级为「伪 ctx 挂载 + 真实临时 git 仓库端到端」，
+  覆盖注入、敏感文件排除、单次使用、权限收窄、squash、amend 与非 git 目录
+
 ## [0.4.1] - 2026-10
 
 ### Fixed
@@ -20,8 +64,6 @@
   正文提醒，与原始设计一致
 - 四个模板均新增显式禁止：不得提出流程未列出的其他确认问题（点名禁止
   「是否输出提交计划」「是否继续」这类追问）
-
-## [0.4.0] - 2026-10
 
 ## [0.4.0] - 2026-10
 

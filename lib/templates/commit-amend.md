@@ -15,7 +15,7 @@
 
 1. 阅读「Git 事实」的 diff，判断哪些文件属于同一关注点
 2. 只暂存属于同一关注点的文件（显式列出 `files`，不要用 `-A`）；暂存前核对清单并排除敏感文件
-3. 使用 `"amend": true` 把变更追加到上一次提交
+3. 在正文展示文件清单与新 message 预览，然后调用一次 `smart_commit`，用 `"amend": true` 把变更追加到上一次提交
 4. 如果追加的变更与原提交主题不同，建议用户同时修改 commit message（给新的 `message`）
 
 ## 情况 B：无未提交的变更
@@ -23,7 +23,7 @@
 1. 阅读「Git 事实」中的 `git show --stat HEAD`，了解最近一次提交的完整内容
 2. 用 `ask_user_question` 询问用户要如何修改 commit message（question 里给出当前 message 与建议），
    等待用户回复后再继续
-3. 使用 `"amend": true` + 新的 `message` 执行修改
+3. 调用 `smart_commit`，使用 `"amend": true` + 新的 `message` 执行修改
 
 ## Commit Message 规范
 

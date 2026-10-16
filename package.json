@@ -1,7 +1,7 @@
 {
   "name": "dsh-smart-commit",
-  "version": "0.4.1",
-  "description": "智能 Git 提交：分析变更并生成符合 Conventional Commits 的中文提交，支持 WIP/amend/squash",
+  "version": "0.5.0",
+  "description": "智能 Git 提交：/commit 系列 host 命令 + smart_commit 宿主工具，生成符合 Conventional Commits 的中文提交，支持 WIP/amend/squash",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -17,7 +17,6 @@
   },
   "exports": {
     ".": "./lib/index.js",
-    "./client": "./lib/client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -25,16 +24,6 @@
     "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-client-ui-primitives",
-        "@deepseek-ai/dsh-client-ui-commands",
-        "@deepseek-ai/dsh-client-ui-input-trigger",
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-api-session-controller"
-      ]
     }
   },
   "scripts": {
@@ -55,13 +44,5 @@
     "git",
     "commit",
     "conventional-commits"
-  ],
-  "peerDependencies": {
-    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0-rc.6 <0.3.0-0"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-client-ui-primitives": {
-      "optional": true
-    }
-  }
+  ]
 }
